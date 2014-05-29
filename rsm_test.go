@@ -184,6 +184,50 @@ func (r *RSMSuite) TestBeforeAfterAllTransitionsHandler(c *C) {
 	c.Assert(r.rsm.CurrentState, Equals, "end")
 }
 
+func (r *RSMSuite) TestMultipleHandlers(c *C) {
+	counter := 0
+	handler := func(e *Event) error {
+		counter++
+		return nil
+	}
+
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	err := r.rsm.Transit("end")
+	c.Assert(err, IsNil)
+	c.Assert(counter, Equals, 6)
+}
+
+func (r *RSMSuite) TestMultipleHandlersFailAny(c *C) {
+	successCalled := 0
+	handler := func(e *Event) error {
+		successCalled++
+		return nil
+	}
+
+	failHandler := func(e *Event) error {
+		return r.err
+	}
+
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", handler)
+	r.rsm.AddTransition("start", "end", failHandler)
+	r.rsm.AddTransition("start", "end", handler)
+
+	err := r.rsm.Transit("end")
+	c.Assert(err, Equals, r.err)
+	c.Assert(successCalled, Equals, 2)
+}
+
+func (r *RSMSuite) TestTransitionToNonExistentState(c *C) {
+	err := r.rsm.Transit("wat")
+	c.Assert(err, NotNil)
+}
+
 func (r *RSMSuite) TestHandlerOrders(c *C) {
 	stage := 0
 	beforeAllHandler := func(e *Event) error {
@@ -198,32 +242,39 @@ func (r *RSMSuite) TestHandlerOrders(c *C) {
 		return nil
 	}
 
-	inProgressHandler := func(e *Event) error {
+	inProgressHandler1 := func(e *Event) error {
 		c.Assert(stage, Equals, 2)
 		stage = 3
 		return nil
 	}
 
-	afterTransitionHandler := func(e *Event) error {
+	inProgressHandler2 := func(e *Event) error {
 		c.Assert(stage, Equals, 3)
 		stage = 4
 		return nil
 	}
 
-	afterAllHandler := func(e *Event) error {
+	afterTransitionHandler := func(e *Event) error {
 		c.Assert(stage, Equals, 4)
 		stage = 5
 		return nil
 	}
 
+	afterAllHandler := func(e *Event) error {
+		c.Assert(stage, Equals, 5)
+		stage = 6
+		return nil
+	}
+
 	r.rsm.BeforeTransitionHandler(beforeAllHandler)
 	r.rsm.AddHandler("start", "end", StageBefore, beforeTransitionHandler)
-	r.rsm.AddTransition("start", "end", inProgressHandler)
+	r.rsm.AddTransition("start", "end", inProgressHandler1)
+	r.rsm.AddTransition("start", "end", inProgressHandler2)
 	r.rsm.AddHandler("start", "end", StageAfter, afterTransitionHandler)
 	r.rsm.AfterTransitionHandler(afterAllHandler)
 
 	r.rsm.Transit("end")
-	c.Assert(stage, Equals, 5)
+	c.Assert(stage, Equals, 6)
 }
 
 func (r *RSMSuite) TestStateTransitionRetries(c *C) {
