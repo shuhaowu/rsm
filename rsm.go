@@ -26,6 +26,23 @@ func NilHandler(e *Event) error {
 	return nil
 }
 
+// Creates a handler that transitions to another state. Typically called after
+// the transition has taken place (`StageAfter`).
+//
+// Takes a string that's the next state's name and returns an EventHandler.
+//
+// Example:
+//   sm.AddTransition([]string{"start"}, "middle", nil)
+//   sm.AddTransition([]string{"middle"}, "end", nil)
+//   sm.AddAfterHandler([]string{"start"}, "middle", rsm.TransitionTo("end"))
+//
+//   sm.Transit("middle") // will go all the way to the end.
+func TransitionTo(state string) EventHandler {
+	return func(e *Event) error {
+		return e.RSM.Transit(state, e.Args...)
+	}
+}
+
 type transitionKey struct {
 	startState string
 	endState   string
@@ -80,12 +97,24 @@ func (r *RSM) AddHandler(startStates []string, endState string, stage int, handl
 	}
 }
 
-func (r *RSM) AddTransition(startStates []string, endState string, handler EventHandler) {
+func (r *RSM) AddBeforeHandler(startStates []string, endState string, handler EventHandler) {
+	r.AddHandler(startStates, endState, StageBefore, handler)
+}
+
+func (r *RSM) AddAfterHandler(startStates []string, endState string, handler EventHandler) {
+	r.AddHandler(startStates, endState, StageAfter, handler)
+}
+
+func (r *RSM) AddInProgressHandler(startStates []string, endState string, handler EventHandler) {
 	if handler == nil {
 		handler = NilHandler
 	}
 
 	r.AddHandler(startStates, endState, StageInProgress, handler)
+}
+
+func (r *RSM) AddTransition(startStates []string, endState string, handler EventHandler) {
+	r.AddInProgressHandler(startStates, endState, handler)
 }
 
 func (r *RSM) CanTransitionTo(state string) bool {

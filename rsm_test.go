@@ -247,6 +247,15 @@ func (r *RSMSuite) TestTransitionToNonExistentState(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (r *RSMSuite) TestTransitionToHandler(c *C) {
+	r.rsm.AddTransition([]string{"start"}, "middle", nil)
+	r.rsm.AddTransition([]string{"middle"}, "end", nil)
+	r.rsm.AddAfterHandler([]string{"start"}, "middle", TransitionTo("end"))
+
+	r.rsm.Transit("middle")
+	c.Assert(r.rsm.CurrentState, Equals, "end")
+}
+
 func (r *RSMSuite) TestMultipleStartState(c *C) {
 	r.rsm.AddTransition([]string{"start", "middle"}, "end", nil)
 	r.rsm.AddTransition([]string{"start"}, "middle", nil)
@@ -304,10 +313,10 @@ func (r *RSMSuite) TestHandlerOrders(c *C) {
 	}
 
 	r.rsm.BeforeTransitionHandler(beforeAllHandler)
-	r.rsm.AddHandler([]string{"start"}, "end", StageBefore, beforeTransitionHandler)
+	r.rsm.AddBeforeHandler([]string{"start"}, "end", beforeTransitionHandler)
 	r.rsm.AddTransition([]string{"start"}, "end", inProgressHandler1)
 	r.rsm.AddTransition([]string{"start"}, "end", inProgressHandler2)
-	r.rsm.AddHandler([]string{"start"}, "end", StageAfter, afterTransitionHandler)
+	r.rsm.AddAfterHandler([]string{"start"}, "end", afterTransitionHandler)
 	r.rsm.AfterTransitionHandler(afterAllHandler)
 
 	r.rsm.Transit("end")
