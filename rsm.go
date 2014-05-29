@@ -33,8 +33,10 @@ type transitionKey struct {
 }
 
 type RSM struct {
-	transitions map[transitionKey]EventHandler
-	quit        chan bool
+	transitions      map[transitionKey]EventHandler
+	beforeTransition EventHandler
+	afterTransition  EventHandler
+	quit             chan bool
 
 	CurrentState  string
 	RetryWaitTime func(int) time.Duration
@@ -51,6 +53,14 @@ func NewRSM(currentState string, retriesWaitTime func(int) time.Duration, maxRet
 	rsm.transitions = make(map[transitionKey]EventHandler)
 
 	return rsm
+}
+
+func (r *RSM) BeforeTransitionHandler(handler EventHandler) {
+	r.beforeTransition = handler
+}
+
+func (r *RSM) AfterTransitionHandler(handler EventHandler) {
+	r.afterTransition = handler
 }
 
 func (r *RSM) AddHandler(startState, endState string, stage int, handler EventHandler) {
@@ -79,6 +89,20 @@ func (r *RSM) Transit(nextState string, args ...interface{}) error {
 	var ok bool
 	var event *Event
 	var err error
+
+	if r.beforeTransition != nil {
+		event = &Event{
+			RSM:   r,
+			Stage: StageBefore,
+			Src:   r.CurrentState,
+			Dest:  nextState,
+			Args:  args,
+		}
+		err = r.beforeTransition(event)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Before transition handler
 	handler, ok = r.transitions[transitionKey{r.CurrentState, nextState, StageBefore}]
@@ -126,6 +150,17 @@ func (r *RSM) Transit(nextState string, args ...interface{}) error {
 		}
 		// After transition handler must not return an error.
 		handler(event)
+	}
+
+	if r.afterTransition != nil {
+		event = &Event{
+			RSM:   r,
+			Stage: StageAfter,
+			Src:   beforeState,
+			Dest:  r.CurrentState,
+			Args:  args,
+		}
+		r.afterTransition(event)
 	}
 	return nil
 }
