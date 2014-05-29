@@ -137,9 +137,10 @@ func (r *RSMSuite) TestStateTransitionFailDuringInProgress(c *C) {
 	c.Assert(r.rsm.CurrentState, Equals, "start")
 }
 
-func (r *RSMSuite) TestBeforeAfterAllTransitionsHandler(c *C) {
+func (r *RSMSuite) TestBeforeAfterFinalizeAllTransitionsHandler(c *C) {
 	args := []string{"1", "2"}
 	beforeHandlerCalled := false
+	finalizeHandlerCalled := false
 	afterHandlerCalled := false
 	beforeHandler := func(e *Event) error {
 		beforeHandlerCalled = true
@@ -153,6 +154,22 @@ func (r *RSMSuite) TestBeforeAfterAllTransitionsHandler(c *C) {
 		c.Assert(e.Dest, Equals, "end")
 		c.Assert(e.RSM, Equals, r.rsm)
 		c.Assert(e.Stage, Equals, StageBefore)
+		c.Assert(e.RSM.CurrentState, Equals, "start")
+		return nil
+	}
+
+	finalizeHandler := func(e *Event) error {
+		finalizeHandlerCalled = true
+		eargs := make([]string, len(e.Args))
+		for i, a := range e.Args {
+			eargs[i] = a.(string)
+		}
+
+		c.Assert(eargs, DeepEquals, args)
+		c.Assert(e.Src, Equals, "start")
+		c.Assert(e.Dest, Equals, "end")
+		c.Assert(e.RSM, Equals, r.rsm)
+		c.Assert(e.Stage, Equals, StageInProgress)
 		c.Assert(e.RSM.CurrentState, Equals, "start")
 		return nil
 	}
@@ -174,12 +191,14 @@ func (r *RSMSuite) TestBeforeAfterAllTransitionsHandler(c *C) {
 	}
 
 	r.rsm.BeforeTransitionHandler(beforeHandler)
+	r.rsm.FinalizeTransitionHandler(finalizeHandler)
 	r.rsm.AfterTransitionHandler(afterHandler)
 	r.rsm.AddTransition("start", "end", nil)
 
 	err := r.rsm.Transit("end", "1", "2")
 	c.Assert(err, IsNil)
 	c.Assert(beforeHandlerCalled, Equals, true)
+	c.Assert(finalizeHandlerCalled, Equals, true)
 	c.Assert(afterHandlerCalled, Equals, true)
 	c.Assert(r.rsm.CurrentState, Equals, "end")
 }
