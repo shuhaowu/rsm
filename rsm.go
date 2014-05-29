@@ -68,22 +68,24 @@ func (r *RSM) AfterTransitionHandler(handler EventHandler) {
 	r.afterTransition = handler
 }
 
-func (r *RSM) AddHandler(startState, endState string, stage int, handler EventHandler) {
-	handlers, ok := r.transitions[transitionKey{startState, endState, stage}]
-	if ok {
-		handlers = append(handlers, handler)
-	} else {
-		handlers = []EventHandler{handler}
+func (r *RSM) AddHandler(startStates []string, endState string, stage int, handler EventHandler) {
+	for _, startState := range startStates {
+		handlers, ok := r.transitions[transitionKey{startState, endState, stage}]
+		if ok {
+			handlers = append(handlers, handler)
+		} else {
+			handlers = []EventHandler{handler}
+		}
+		r.transitions[transitionKey{startState, endState, stage}] = handlers
 	}
-	r.transitions[transitionKey{startState, endState, stage}] = handlers
 }
 
-func (r *RSM) AddTransition(startState, endState string, handler EventHandler) {
+func (r *RSM) AddTransition(startStates []string, endState string, handler EventHandler) {
 	if handler == nil {
 		handler = NilHandler
 	}
 
-	r.AddHandler(startState, endState, StageInProgress, handler)
+	r.AddHandler(startStates, endState, StageInProgress, handler)
 }
 
 func (r *RSM) CanTransitionTo(state string) bool {
